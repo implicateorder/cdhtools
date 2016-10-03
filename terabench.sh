@@ -205,10 +205,10 @@
 
 
 printUsage() {
-    echo "Usage: $0 -p <teragen|terasort|all> -x <replication_level> -m <map tasks> -M <map memory> -r <reduce tasks> -R <reduce memory> -d <data size> -s <shuffle type> \
+    echo "Usage: $0 -p <teragen|terasort|teravalidate|all> -x <replication_level> -m <map tasks> -M <map memory> -r <reduce tasks> -R <reduce memory> -d <data size> -s <shuffle type> \
 -B <128|256|512|1024> -i <input dir> -o <output dir> |-h 
 		-v - benchmark with MR1 or MR2 code, our default is 2
-		-p - teragen, terasort or all (all includes both phases)	
+		-p - teragen, terasort, teravalidate or all 
 		-i - input directory in HDFS
 		-o - output directory in HDFS
 		-x - replication factor, default is 3 
@@ -332,6 +332,11 @@ printMesg() {
 -Ddfs.blocksize=$dfsblock \
 -Dyarn.app.mapreduce.am.job.cbd-mode.enable=false -Dyarn.app.mapreduce.am.job.map.pushdown=false \
 -Dmapreduce.job.maps=$map_tasks -Dmapreduce.job.reduces=$reduce_tasks -Dmapreduce.reduce.memory.mb=$reduce_mem $input $output";;
+	 '5') mesg="$hdfs_bin dfs -rm -r -skipTrash $output";;
+	 '6') mesg="$hadoop_bin jar $mapreduce_jar teravalidate -Ddfs.replication=$replication \
+-Ddfs.client.block.write.locateFollowingBlock.retries=15 -Dyarn.app.mapreduce.am.job.cbd-mode.enable=false \
+-Ddfs.blocksize=$dfsblock \
+-Dyarn.app.mapreduce.am.job.map.pushdown=false -Dmapreduce.job.maps=$map_tasks -Dmapreduce.map.memory.mb=$map_mem $input $output";;
 	*) echo "Unknown option" && exit 1;;
     esac
     echo "$mesg";
@@ -347,6 +352,18 @@ teraGenIt() {
 -Ddfs.client.block.write.locateFollowingBlock.retries=15 -Dyarn.app.mapreduce.am.job.cbd-mode.enable=false \
 -Ddfs.blocksize=$dfsblock \
 -Dyarn.app.mapreduce.am.job.map.pushdown=false -Dmapreduce.job.maps=$map_tasks -Dmapreduce.map.memory.mb=$map_mem $data_size $input
+}
+
+teraValidateIt() {
+# Run the teravalidate
+    printMesg 5;
+    $hdfs_bin dfs -rm -r -skipTrash $output;
+    sleep 30;
+    printMesg 6;
+    $hadoop_bin jar $mapreduce_jar teravalidate -Ddfs.replication=$replication \
+-Ddfs.client.block.write.locateFollowingBlock.retries=15 -Dyarn.app.mapreduce.am.job.cbd-mode.enable=false \
+-Ddfs.blocksize=$dfsblock \
+-Dyarn.app.mapreduce.am.job.map.pushdown=false -Dmapreduce.job.maps=$map_tasks -Dmapreduce.map.memory.mb=$map_mem $input $output
 }
 
 teraSortIt() {
@@ -369,6 +386,7 @@ teraSortIt() {
 case $phase in
 	'teragen') teraGenIt;;
 	'terasort') teraSortIt;;
-	'all') teraGenIt && teraSortIt;;
+	'teravalidate') teraValidateIt;;
+	'all') teraGenIt && teraSortIt && teraValidateIt;;
 	*) echo "Unknown phase - $phase"; printUsage && exit 1;;
 esac
