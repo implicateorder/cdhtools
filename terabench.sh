@@ -362,7 +362,7 @@ teraGenIt() {
 teraValidateIt() {
 # Run the teravalidate
     printMesg 5;
-    $hdfs_bin dfs -rm -r -skipTrash $output;
+    $hdfs_bin dfs -rm -r -skipTrash $report;
     sleep 30;
     printMesg 6;
     $hadoop_bin jar $mapreduce_jar teravalidate -Ddfs.replication=$replication \
