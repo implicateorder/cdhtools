@@ -206,11 +206,12 @@
 
 printUsage() {
     echo "Usage: $0 -p <teragen|terasort|teravalidate|all> -x <replication_level> -m <map tasks> -M <map memory> -r <reduce tasks> -R <reduce memory> -d <data size> -s <shuffle type> \
--B <128|256|512|1024> -i <input dir> -o <output dir> |-h 
+-B <128|256|512|1024> -i <input dir> -o <output dir> -O <report dir> |-h 
 		-v - benchmark with MR1 or MR2 code, our default is 2
 		-p - teragen, terasort, teravalidate or all 
 		-i - input directory in HDFS
 		-o - output directory in HDFS
+		-O - report directory in HDFS (for teravalidate)
 		-x - replication factor, default is 3 
 		-m - number of map tasks, our default is 100 
 		-M - map task memory size
@@ -228,7 +229,7 @@ eg: $0 -v 2 -p teragen -x 3 -m 200 -r 300 -d 100000000 -s regular -i terasort_in
 
 # main
 
-while getopts v:p:x:m:M:r:R:d:s:i:o:B:h switch
+while getopts v:p:x:m:M:r:R:d:s:i:o:O:B:h switch
 do
     case $switch in 
   	v) version=$OPTARG;;
@@ -242,6 +243,7 @@ do
 	s) shuffle=$OPTARG;;
 	i) input=$OPTARG;;
 	o) output=$OPTARG;;
+	O) report=$OPTARG;;
 	B) blocksize=$OPTARG;;
 	h) printUsage && exit 0;;
       	*) echo "Unknown option" && exit 1;;
@@ -270,6 +272,9 @@ if [ -z $input ]; then
 fi
 if [ -z $output ]; then
     output=ts_out
+fi
+if [ -z $report ]; then
+    report=tv_out
 fi
 if [ -z $replication ]; then
     replication=3
@@ -332,11 +337,11 @@ printMesg() {
 -Ddfs.blocksize=$dfsblock \
 -Dyarn.app.mapreduce.am.job.cbd-mode.enable=false -Dyarn.app.mapreduce.am.job.map.pushdown=false \
 -Dmapreduce.job.maps=$map_tasks -Dmapreduce.job.reduces=$reduce_tasks -Dmapreduce.reduce.memory.mb=$reduce_mem $input $output";;
-	 '5') mesg="$hdfs_bin dfs -rm -r -skipTrash $output";;
+	 '5') mesg="$hdfs_bin dfs -rm -r -skipTrash $report";;
 	 '6') mesg="$hadoop_bin jar $mapreduce_jar teravalidate -Ddfs.replication=$replication \
 -Ddfs.client.block.write.locateFollowingBlock.retries=15 -Dyarn.app.mapreduce.am.job.cbd-mode.enable=false \
 -Ddfs.blocksize=$dfsblock \
--Dyarn.app.mapreduce.am.job.map.pushdown=false -Dmapreduce.job.maps=$map_tasks -Dmapreduce.map.memory.mb=$map_mem $input $output";;
+-Dyarn.app.mapreduce.am.job.map.pushdown=false -Dmapreduce.job.maps=$map_tasks -Dmapreduce.map.memory.mb=$map_mem $output $report";;
 	*) echo "Unknown option" && exit 1;;
     esac
     echo "$mesg";
@@ -363,7 +368,7 @@ teraValidateIt() {
     $hadoop_bin jar $mapreduce_jar teravalidate -Ddfs.replication=$replication \
 -Ddfs.client.block.write.locateFollowingBlock.retries=15 -Dyarn.app.mapreduce.am.job.cbd-mode.enable=false \
 -Ddfs.blocksize=$dfsblock \
--Dyarn.app.mapreduce.am.job.map.pushdown=false -Dmapreduce.job.maps=$map_tasks -Dmapreduce.map.memory.mb=$map_mem $input $output
+-Dyarn.app.mapreduce.am.job.map.pushdown=false -Dmapreduce.job.maps=$map_tasks -Dmapreduce.map.memory.mb=$map_mem $output $report
 }
 
 teraSortIt() {
