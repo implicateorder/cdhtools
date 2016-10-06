@@ -51,7 +51,7 @@ do
     # Randomize which benchmark to run
     for bm in $bmarks
     do
-        runthis="$(echo $RANDOM $bm|sort -n|awk '{print $2}')"
+        runthis="$(echo $RANDOM $bm|sort -n|awk '{print $2}'|head -1)"
 	./terabench.sh -p $runthis -x 3 -d $data_size -m $map_tasks -r $reduce_tasks -i $indir -o $outdir -O $repdir
 	# sleep for random period of time before running the next benchmark
 	sleep $(( $RANDOM % 900 ))
