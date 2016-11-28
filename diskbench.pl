@@ -240,15 +240,6 @@ if ( !$bs ) {
 if ( !$count ) {
     $count = "1000";
 }
-if ( !$vector ) {
-    $vector = "cpuSpeed";
-}
-if ( $vector = "cpuSpeed" ) {
-    $mode = "parallel";
-}
-else {
-    $mode = "serial";
-}
 if ( !$mode ) {
     $mode = "serial";
 }
@@ -256,13 +247,13 @@ if ( !$mode ) {
 if ( !$ddopt ) {
     $ddopt = "conv=fdatasync";
 }
-if ( $vector != "cpuSpeed" ) {
-    if ( !$dir and !$filelist ) {
-        print "unable to proceed without valid input directory!\n"
-          && &printUsage
-          && exit(1);
-    }
-}
+#if ( $vector != "cpuSpeed" ) {
+#    if ( !$dir and !$filelist ) {
+#        print "unable to proceed without valid input directory!\n"
+#          && &printUsage
+#          && exit(1);
+#    }
+#}
 
 if ( !$filelist ) {
     $filelist = "/var/tmp/flist.txt";
@@ -281,8 +272,8 @@ sub printUsage {
 	--help 	- print this message
 	--bs - Block size in K or M, defaults to 64K, to match HDFS write chunk size
 	--count - number of blocks
-	--vector - options are readSpeed,writeSpeed and cpuSpeed. Default is cpuSpeed
-	--mode - options are serial or parallel. Defaults to serial. Parallel mode will try to launch multiple read or write operations in parallel
+	--vector - options are readSpeed,writeSpeed and cpuSpeed. Run cpuSpeed in parallel mode
+	--mode - options are serial or parallel. Parallel mode will try to launch multiple read or write operations in parallel
 	--logfile - pass the name of the logfile you want to capture your output to
 	--ddopt - pass the dd(1m) option you want to use. for eg: oflag=direct for direct write, iflag=direct for direct read, defaults to conv=fdatasync
 	--filelist - list of input files to read from
@@ -347,15 +338,7 @@ sub runWriteBM {
     print WLIST "$name\n";
     close(WLIST);
     chomp $bs;
-
-    if ( $bs =~ m/M/ ) {
-        $bs =~ s/M//;
-        $bs = $bs * 1024 * 1024;
-    }
-    if ( $bs =~ m/K/ ) {
-        $bs =~ s/K//;
-        $bs = $bs * 1024;
-    }
+    my $bs   = &whatsMyBS($bs);
     my $size  = ( $bs * $count ) / (1024);
     my $start = time;
     my $wropt = "if=/dev/zero of=$name bs=$bs count=$count $ddopt";
@@ -378,15 +361,8 @@ sub runReadBM {
     my $ddopt    = "iflag=direct";
     chomp $readfile;
     chomp $bs;
-    if ( $bs =~ m/M/ ) {
-        $bs =~ s/M//;
-        $bs = $bs * 1024 * 1024;
-    }
-    if ( $bs =~ m/K/ ) {
-        $bs =~ s/K//;
-        $bs = $bs * 1024;
-    }
-    my $size  = $bs * $count / (1024);
+    my $bs   = &whatsMyBS($bs);
+    my $size  = ($bs * $count) / (1024);
     my $start = time;
     my $rdopt = "if=$readfile of=/dev/null bs=$bs count=$count $ddopt";
 
@@ -481,15 +457,15 @@ elsif ( $vector =~ m/readSpeed/ ) {
     close(RIF);
     my $numfiles = @files;
 
-    if ( $mode =~ m/serial/ ) {
+    if ( $mode =~ m/serial/i ) {
         for my $readfile (@files) {
-            print "$readfile \n";
+            print "Reading from $readfile \n";
             &runReadBM($readfile);
         }
     }
-    elsif ( $mode =~ m/parallel/ ) {
+    elsif ( $mode =~ m/parallel/i ) {
         foreach my $readfile (@files) {
-            print "$readfile \n";
+            print "Reading from $readfile \n";
             threads->create( \&runReadBM, $readfile );
         }
         while ( threads->list ) {

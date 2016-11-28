@@ -383,7 +383,7 @@ teraSortIt() {
 -Dmapred.reduce.child.log.level=WARN -Ddfs.replication=$replication \
 -Dyarn.app.mapreduce.am.job.cbd-mode.enable=false -Dyarn.app.mapreduce.am.job.map.pushdown=false \
 -Ddfs.blocksize=$dfsblock \
--Dmapreduce.job.maps=$map_tasks -Dmapreduce.job.reduces=$reduce_tasks -Dmapreduce.reduce.memory.mb=$reduce_mem $input $output
+-Dmapreduce.job.maps=$map_tasks -Dmapreduce.map.memory.mb=$map_mem -Dmapreduce.job.reduces=$reduce_tasks -Dmapreduce.reduce.memory.mb=$reduce_mem $input $output
 }
 
 # Main
