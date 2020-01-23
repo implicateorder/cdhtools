@@ -207,7 +207,6 @@
 printUsage() {
     echo "Usage: $0 -p <teragen|terasort|teravalidate|all> -x <replication_level> -m <map tasks> -M <map memory> -r <reduce tasks> -R <reduce memory> -d <data size> -s <shuffle type> \
 -B <128|256|512|1024> -i <input dir> -o <output dir> -O <report dir> |-h 
-		-v - benchmark with MR1 or MR2 code, our default is 2
 		-p - teragen, terasort, teravalidate or all 
 		-i - input directory in HDFS
 		-o - output directory in HDFS
@@ -220,19 +219,19 @@ printUsage() {
 		-d - Data size in number of 100byte rows, our default is 1000000000 
 		-s - shuffle type. Allowed options are regular or uda, default is regular 
 		-B - DFS block size. Allowed options (128|256|512|1024), default is 128 MB
+		-D - Distribution. Allowed options are CDH, HDP and CDP
 		-h - print this message 
-eg: $0 -v 2 -p terasort -x 2 -m 200 -r 300 -d 100000000 -s regular -i terasort_in -o terasort_out
-eg: $0 -v 2 -p teragen -x 3 -m 200 -r 300 -d 100000000 -s regular -i terasort_in -B 512 -o terasort_out";
+eg: $0 -p terasort -x 2 -m 200 -r 300 -d 100000000 -s regular -i terasort_in -o terasort_out
+eg: $0 -p teragen -x 3 -m 200 -r 300 -d 100000000 -s regular -i terasort_in -B 512 -o terasort_out -D HDP";
 }
 
 
 
 # main
 
-while getopts v:p:x:m:M:r:R:d:s:i:o:O:B:h switch
+while getopts p:x:m:M:r:R:d:s:i:o:O:B:D:h switch
 do
     case $switch in 
-  	v) version=$OPTARG;;
 	p) phase=$OPTARG;;
 	x) replication=$OPTARG;;
 	m) map_tasks=$OPTARG;;
@@ -245,6 +244,7 @@ do
 	o) output=$OPTARG;;
 	O) report=$OPTARG;;
 	B) blocksize=$OPTARG;;
+	D) distro=$OPTARG;;
 	h) printUsage && exit 0;;
       	*) echo "Unknown option" && exit 1;;
     esac
@@ -253,10 +253,6 @@ shift $(( $OPTIND - 1 ))
 
 if [ $OPTIND -le 1 ]; then
     printUsage && exit 1;
-fi
-
-if [ -z $version ]; then
-    version=2;
 fi
 
 if [ -z $phase ]; then
@@ -298,13 +294,21 @@ if [ -z $data_size ]; then
     data_size=1000000000
 fi
 
-case $version in
-	'1') mapreduce_jar=/opt/cloudera/parcels/CDH/lib/hadoop-0.20-mapreduce/hadoop-examples.jar;;
-	'2') mapreduce_jar=/opt/cloudera/parcels/CDH/lib/hadoop-mapreduce/hadoop-mapreduce-examples.jar;;
-	*) echo "Unknown version $version - only accept <1|2>" && exit 1;;
+if [ -z $distro ]; then
+    distro="CDH"
+fi
+
+# ascertain distribution, whether HDP or CDH or CDP
+
+case $distro in
+    'CDH') mapreduce_jar=/opt/cloudera/parcels/CDH/lib/hadoop-mapreduce/hadoop-mapreduce-examples.jar;;
+    'HDP') mapreduce_jar=/usr/hdp/current/hadoop-mapreduce-client/hadoop-mapreduce-examples.jar;;
+    'CDP') mapreduce_jar=/opt/cloudera/parcels/CDH/lib/hadoop-mapreduce/hadoop-mapreduce-examples.jar;;
+    *) echo "Unknown distro $distro - only accept CDH|HDP|CDP" && exit 1;;
 esac
 
-hadoop_bin=/usr/bin/hadoop
+
+yarn_bin=/usr/bin/yarn
 hdfs_bin=/usr/bin/hdfs
 
 case $shuffle in
@@ -325,21 +329,20 @@ esac
 printMesg() {
      case $1 in 
 	 '1') mesg="$hdfs_bin dfs -rm -r -skipTrash $input";;
-	 '2') mesg="$hadoop_bin jar $mapreduce_jar teragen -Ddfs.replication=$replication \
--Ddfs.client.block.write.locateFollowingBlock.retries=15 -Dyarn.app.mapreduce.am.job.cbd-mode.enable=false \
+	 '2') mesg="$yarn_bin jar $mapreduce_jar teragen -Ddfs.replication=$replication \
+-Ddfs.client.block.write.locateFollowingBlock.retries=15 \
 -Ddfs.blocksize=$dfsblock \
 -Dyarn.app.mapreduce.am.job.map.pushdown=false -Dmapreduce.job.maps=$map_tasks -Dmapreduce.map.memory.mb=$map_mem $data_size $input";;
 	 '3') mesg="$hdfs_bin dfs -rm -r -skipTrash $output";;
-	'4') mesg="$hadoop_bin jar  $mapreduce_jar terasort  \
+	'4') mesg="$yarn_bin jar  $mapreduce_jar terasort  \
 -Dmapreduce.job.reduce.shuffle.consumer.plugin.class=$shuffle_algo \
 -Ddfs.client.block_write.locateFollowingBlock.retries=30 \
 -Dmapred.reduce.child.log.level=WARN -Ddfs.replication=$replication \
 -Ddfs.blocksize=$dfsblock \
--Dyarn.app.mapreduce.am.job.cbd-mode.enable=false -Dyarn.app.mapreduce.am.job.map.pushdown=false \
 -Dmapreduce.job.maps=$map_tasks -Dmapreduce.job.reduces=$reduce_tasks -Dmapreduce.reduce.memory.mb=$reduce_mem $input $output";;
 	 '5') mesg="$hdfs_bin dfs -rm -r -skipTrash $report";;
-	 '6') mesg="$hadoop_bin jar $mapreduce_jar teravalidate -Ddfs.replication=$replication \
--Ddfs.client.block.write.locateFollowingBlock.retries=15 -Dyarn.app.mapreduce.am.job.cbd-mode.enable=false \
+	 '6') mesg="$yarn_bin jar $mapreduce_jar teravalidate -Ddfs.replication=$replication \
+-Ddfs.client.block.write.locateFollowingBlock.retries=15 \
 -Ddfs.blocksize=$dfsblock \
 -Dyarn.app.mapreduce.am.job.map.pushdown=false -Dmapreduce.job.maps=$map_tasks -Dmapreduce.map.memory.mb=$map_mem $output $report";;
 	*) echo "Unknown option" && exit 1;;
@@ -351,40 +354,41 @@ teraGenIt() {
 # Run the teragen
     printMesg 1;
     $hdfs_bin dfs -rm -r -skipTrash $input;
-    sleep 30;
+    sleep 15;
     printMesg 2;
-    $hadoop_bin jar $mapreduce_jar teragen -Ddfs.replication=$replication \
--Ddfs.client.block.write.locateFollowingBlock.retries=15 -Dyarn.app.mapreduce.am.job.cbd-mode.enable=false \
+    $yarn_bin jar $mapreduce_jar teragen -Ddfs.replication=$replication \
+-Ddfs.client.block.write.locateFollowingBlock.retries=15 \
 -Ddfs.blocksize=$dfsblock \
 -Dyarn.app.mapreduce.am.job.map.pushdown=false -Dmapreduce.job.maps=$map_tasks -Dmapreduce.map.memory.mb=$map_mem $data_size $input
-}
-
-teraValidateIt() {
-# Run the teravalidate
-    printMesg 5;
-    $hdfs_bin dfs -rm -r -skipTrash $report;
-    sleep 30;
-    printMesg 6;
-    $hadoop_bin jar $mapreduce_jar teravalidate -Ddfs.replication=$replication \
--Ddfs.client.block.write.locateFollowingBlock.retries=15 -Dyarn.app.mapreduce.am.job.cbd-mode.enable=false \
--Ddfs.blocksize=$dfsblock \
--Dyarn.app.mapreduce.am.job.map.pushdown=false -Dmapreduce.job.maps=$map_tasks -Dmapreduce.map.memory.mb=$map_mem $output $report
 }
 
 teraSortIt() {
 # run the terasort
    printMesg 3;
    $hdfs_bin dfs -rm -r -skipTrash $output;
-    sleep 30;
+    sleep 15;
    printMesg 4;
-   $hadoop_bin jar  $mapreduce_jar terasort  \
+   $yarn_bin jar  $mapreduce_jar terasort  \
 -Dmapreduce.job.reduce.shuffle.consumer.plugin.class=$shuffle_algo \
 -Ddfs.client.block_write.locateFollowingBlock.retries=30 \
 -Dmapred.reduce.child.log.level=WARN -Ddfs.replication=$replication \
--Dyarn.app.mapreduce.am.job.cbd-mode.enable=false -Dyarn.app.mapreduce.am.job.map.pushdown=false \
 -Ddfs.blocksize=$dfsblock \
 -Dmapreduce.job.maps=$map_tasks -Dmapreduce.map.memory.mb=$map_mem -Dmapreduce.job.reduces=$reduce_tasks -Dmapreduce.reduce.memory.mb=$reduce_mem $input $output
 }
+
+
+teraValidateIt() {
+# Run the teravalidate
+        printMesg 5;
+        $hdfs_bin dfs -rm -r -skipTrash $report;
+        sleep 15;
+        printMesg 6;
+        $yarn_bin jar $mapreduce_jar teravalidate -Ddfs.replication=$replication \
+    -Ddfs.client.block.write.locateFollowingBlock.retries=15 \
+    -Ddfs.blocksize=$dfsblock \
+    -Dyarn.app.mapreduce.am.job.map.pushdown=false -Dmapreduce.job.maps=$map_tasks -Dmapreduce.map.memory.mb=$map_mem $output $report
+}
+
 
 # Main
 
